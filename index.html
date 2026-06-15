@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Marble Run Live</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='26' fill='%2322d3ee'/><circle cx='24' cy='24' r='7' fill='white' opacity='0.7'/></svg>" />
+  <link rel="stylesheet" href="css/style.css?v=2" />
+</head>
+<body>
+  <div id="app">
+    <!-- ===== PAPAN PLINKO ===== -->
+    <div id="board-wrap">
+      <canvas id="board"></canvas>
+      <h1 id="title">MARBLE RUN <span>LIVE</span></h1>
+      <div id="total-score">SCORE 0</div>
+
+      <!-- LEVEL + PROGRESS BAR (berdampingan, di bawah SCORE) -->
+      <div id="level-row">
+        <span class="sess-level" id="sess-level">LV 1</span>
+        <div id="progress-wrap">
+          <div id="global-bar"><div id="global-bar-fill"></div></div>
+        </div>
+      </div>
+      <div id="rank" class="pos">Rank: Mapan</div>
+
+      <div id="banner"></div>
+
+      <!-- KIRI: note (legend) + countdown gempa + efek aktif + feed (transparan) -->
+      <div id="hud-tl">
+        <div id="legend">
+          <div>⬆️ Naik level = ganti map</div>
+          <div>📉 Score (−) = push-up</div>
+          <div>📈 Score (+) = beli mainan anak</div>
+        </div>
+        <div class="gempa" id="gempa">Gempa : 60s</div>
+        <div id="active-effects"></div>
+        <div id="feed"></div>
+      </div>
+
+      <!-- KANAN: deskripsi + nilai mainan/pushup, lalu coin di bawah -->
+      <div id="hud-tr">
+        <div id="float-win">
+          <div class="fw-conseq plus" id="fw-conseq">🧸 <b>Rp0</b></div>
+          <span class="status-coins">🪙 <b id="sess-coins">0</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SIDEBAR: ticker + leaderboard ===== -->
+    <aside id="sidebar">
+      <div id="ticker"><div id="ticker-inner"></div></div>
+      <div class="panel grow">
+        <div class="panel-title">👑 TOP DONATUR</div>
+        <div id="leaderboard-list">
+          <div class="lb-empty">Menunggu donatur pertama…</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===== KONTROL HOST / TESTING (default tersembunyi; buka via tombol ⚙) ===== -->
+  <div id="controls">
+    <div class="ctrl-section">
+      <span class="ctrl-label">GIFT 1-0 (koin kecil → besar)</span>
+      <div class="ctrl-row" id="effect-buttons"></div>
+    </div>
+    <div class="ctrl-section">
+      <span class="ctrl-label">ENGAGEMENT (non-donasi) + RESET</span>
+      <div class="ctrl-row">
+        <button class="tbtn" onclick="Game.simulateLike(5)">👆 Tap-tap</button>
+        <button class="tbtn" onclick="Game.simulateFollow()">💜 Follow</button>
+        <button class="tbtn" onclick="Game.simulateShare()">🔁 Share</button>
+        <button class="tbtn" onclick="Game.trigger('resetArena')">♻️ Reset Arena</button>
+        <button class="tbtn" id="btn-queue" onclick="CONFIG.gameplay.queueEnabled=!CONFIG.gameplay.queueEnabled; this.textContent='Antrian: '+(CONFIG.gameplay.queueEnabled?'ON':'OFF')">Antrian: OFF</button>
+      </div>
+    </div>
+    <div class="ctrl-section">
+      <span class="ctrl-label">SETTING SESI (lanjut sesi lama)</span>
+      <div class="ctrl-row">
+        <label class="setf">Level<input id="set-level" type="number" value="0"></label>
+        <label class="setf">Total Koin<input id="set-coins" type="number" value="0"></label>
+        <label class="setf">Koin Plus<input id="set-plus" type="number" value="0"></label>
+        <label class="setf">Koin Minus<input id="set-minus" type="number" value="0"></label>
+        <button class="tbtn" id="apply-settings">Simpan & Terapkan</button>
+      </div>
+    </div>
+  </div>
+  <button id="toggle-mute" title="Mute / Unmute">🔊</button>
+  <button id="toggle-controls" onclick="document.getElementById('controls').classList.toggle('show');document.body.classList.toggle('ctrl-open')">⚙</button>
+
+  <!-- ===== SCRIPTS ===== -->
+  <script src="vendor/matter.min.js"></script>
+  <script src="js/config.js?v=2"></script>
+  <script src="js/audio.js?v=2"></script>
+  <script src="js/ui.js?v=2"></script>
+  <script src="js/tiktok-bridge.js?v=2"></script>
+  <script src="js/game.js?v=2"></script>
+  <script>
+    // tombol mute
+    (function setupMute() {
+      const btn = document.getElementById("toggle-mute");
+      btn.onclick = () => {
+        CONFIG.audio.enabled = !CONFIG.audio.enabled;
+        if (CONFIG.audio.enabled) AudioFX.resume();
+        btn.textContent = CONFIG.audio.enabled ? "🔊" : "🔇";
+        btn.classList.toggle("muted", !CONFIG.audio.enabled);
+      };
+    })();
+
+    // tombol 1-0 = 10 gift event (urut koin kecil->besar). Tekan = simulasi gift itu.
+    (function buildGiftButtons() {
+      const wrap = document.getElementById("effect-buttons");
+      Object.keys(CONFIG.keyGifts).forEach((key) => {
+        const kg = CONFIG.keyGifts[key];
+        const b = document.createElement("button");
+        b.className = "kbtn";
+        b.innerHTML = `<b>${key}</b><span>${kg.g}</span>`;
+        b.title = kg.g + " • " + kg.c + " koin";
+        b.onclick = () => { AudioFX.resume(); Game.onGift(kg.g, kg.c, 1, Game.randomGifter()); };
+        wrap.appendChild(b);
+      });
+    })();
+
+    // ticker berjalan: legenda gift -> efek (dibangun dari config)
+    (function buildTicker() {
+      const inner = document.getElementById("ticker-inner");
+      if (!inner) return;
+      function sec(baseMs, coins) {
+        const g = CONFIG.gameplay;
+        const ms = (!coins || coins <= g.effectDurRefCoins) ? baseMs
+          : Math.min(g.effectDurMaxMs, baseMs * (coins / g.effectDurRefCoins));
+        return Math.round(ms / 1000) + " dtk";
+      }
+      function desc(eff, coins) {
+        const g = CONFIG.gameplay;
+        switch (eff) {
+          case "coverMinus": return "tutup score minus " + sec(g.coverDuration, coins);
+          case "coverPlus": return "tutup score plus " + sec(g.coverDuration, coins);
+          case "blackHole": return "black hole " + sec(g.blackHoleDuration, coins);
+          case "flipObstacles": return "flip " + sec(g.flipDuration, coins);
+          case "lowGravity": return "anti-gravity " + sec(g.lowGravityDuration, coins);
+          case "chaosWind": return "angin " + sec(g.chaosWindDuration, coins);
+          case "marbleRain": return "hujan bola";
+          case "namedSlow": return Math.round(g.namedSlowMs / 1000) + " dtk bola bernama";
+          case "spawnNamedMarble": return "bola bernama";
+          case "shoot": return "bola putih";
+          default: return eff;
+        }
+      }
+      const ICON = { "Rose": "🌹", "TikTok": "🎵", "Perfume": "🧴", "Doughnut": "🍩",
+        "Confetti": "🎊", "Hand Hearts": "💕", "Galaxy": "🌌", "Dragon": "🐉",
+        "Universe": "🌠", "TikTok Universe": "🪐" };
+      const DESC = { namedSlow: "5s bola bernama", flipObstacles: "flip papan", blackHole: "black hole",
+        marbleRain: "hujan bola", coverMinus: "🟢 tutup minus", coverPlus: "🔴 tutup plus",
+        lowGravity: "anti-gravity", multiplierBoost: "durasi x5", chaosWind: "angin",
+        nuke: "nuke", megaBoulder: "boulder", spawnNamedMarble: "bola bernama", shoot: "bola putih" };
+      const parts = [];
+      Object.keys(CONFIG.keyGifts).forEach((k) => {
+        const g = CONFIG.keyGifts[k].g, eff = CONFIG.mapping.giftsByName[g];
+        parts.push((ICON[g] || "🎁") + " " + g + ": " + desc(eff, CONFIG.keyGifts[k].c));
+      });
+      parts.push("👆 tap-tap: bola putih");
+      parts.push("💜 follow: " + desc(CONFIG.mapping.follow));
+      parts.push("🔁 share: " + desc(CONFIG.mapping.share));
+      const text = parts.join("   •   ");
+      inner.textContent = text + "   •   " + text; // duplikat -> loop mulus
+    })();
+
+    // setting sesi (resume): isi input dari sesi tersimpan, terapkan saat klik
+    (function setupSettings() {
+      const s = Game.getSession();
+      document.getElementById("set-level").value = s.levelBase || 0;
+      document.getElementById("set-coins").value = Math.round(s.totalCoins || 0);
+      document.getElementById("set-plus").value = Math.round(s.plusCoins || 0);
+      document.getElementById("set-minus").value = Math.round(s.minusCoins || 0);
+      document.getElementById("apply-settings").onclick = () => {
+        Game.applySettings({
+          levelBase: document.getElementById("set-level").value,
+          totalCoins: document.getElementById("set-coins").value,
+          plusCoins: document.getElementById("set-plus").value,
+          minusCoins: document.getElementById("set-minus").value,
+        });
+      };
+    })();
+  </script>
+</body>
+</html>

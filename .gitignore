@@ -1,0 +1,11 @@
+# dependencies
+server/node_modules/
+node_modules/
+
+# logs & os
+*.log
+.DS_Store
+
+# editor
+.vscode/
+.idea/
