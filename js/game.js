@@ -31,7 +31,9 @@ const Game = (() => {
   let flipUntil = 0;
   let blackHole = null;
   let wind = null;
-  let coverState = { minus: { until: 0, bodies: [] }, plus: { until: 0, bodies: [] } };
+  let tug = 0;           // tarik tambang cover: >0 = tutup score minus (bantu), <0 = tutup score plus (sabotase)
+  let coverSide = null;  // "minus" | "plus" | null
+  let coverBodies = [];  // body cover yang sedang tampil
 
   // ---- timing ----
   let lastIdleDrop = 0;
@@ -89,8 +91,7 @@ const Game = (() => {
     return {
       lowGravity: rem(lowGravityUntil),
       flip: rem(flipUntil),
-      coverMinus: rem(coverState.minus.until),
-      coverPlus: rem(coverState.plus.until),
+      tug: tug,
       wind: (wind && wind.until > now) ? { fx: wind.fx, ms: wind.until - now } : null,
       blackHole: (blackHole && blackHole.until > now) ? { x: blackHole.x, y: blackHole.y, ms: blackHole.until - now } : null,
       streams: streams.map((s) => ({ owner: s.owner, color: s.color, ballsLeft: s.ballsLeft, interval: s.interval, coinShare: s.coinShare, quality: s.quality })),
@@ -104,8 +105,7 @@ const Game = (() => {
     if (fx.flip > 0) { Effects.flipObstacles(); flipUntil = now + fx.flip; }
     if (fx.wind) { wind = { fx: fx.wind.fx, until: now + fx.wind.ms }; }
     if (fx.blackHole) { blackHole = { x: fx.blackHole.x, y: fx.blackHole.y, until: now + fx.blackHole.ms, launched: false }; }
-    if (fx.coverMinus > 0) { addCover("minus"); coverState.minus.until = now + fx.coverMinus; }
-    if (fx.coverPlus > 0) { addCover("plus"); coverState.plus.until = now + fx.coverPlus; }
+    if (fx.tug) { tug = fx.tug; updateCover(); }
     if (fx.streams) for (const s of fx.streams) streams.push({
       owner: s.owner, color: s.color, ballsLeft: s.ballsLeft,
       interval: s.interval || CONFIG.gameplay.streamIntervalMs, coinShare: s.coinShare || 0,
@@ -191,7 +191,7 @@ const Game = (() => {
   function buildBoard() {
     Composite.clear(world, false);
     pegs = []; bars = []; slotSensors = [];
-    coverState = { minus: { until: 0, bodies: [] }, plus: { until: 0, bodies: [] } };
+    tug = 0; coverSide = null; coverBodies = [];
 
     const wallOpts = { isStatic: true, restitution: 0.4, label: "wall" };
     Composite.add(world, [
@@ -231,15 +231,29 @@ const Game = (() => {
   // =====================================================================
   //  KELERENG
   // =====================================================================
+  // gaya pipa berdasarkan rank/level (warna, aura, energi ayun, tenaga lontar, ikon karakter)
+  function pipeStyle() {
+    const lv = levelNow();
+    if (lv <= -6) return { color: "#7a6a55", glow: 6,  swing: 0.55, tempo: 0.6, power: 0.7,  icon: "😫", shake: 1.6 };
+    if (lv < 0)   return { color: "#9aa3ad", glow: 9,  swing: 0.7,  tempo: 0.8, power: 0.85, icon: "😔", shake: 0.8 };
+    if (lv === 0) return { color: "#22d3ee", glow: 16, swing: 1,    tempo: 1,   power: 1,    icon: "🙂", shake: 0 };
+    if (lv < 6)   return { color: "#34d399", glow: 18, swing: 1.1,  tempo: 1.1, power: 1.05, icon: "😎", shake: 0 };
+    if (lv < 10)  return { color: "#fbbf24", glow: 26, swing: 1.25, tempo: 1.2, power: 1.15, icon: "🤑", shake: 0, sparkle: true };
+    return { color: "#fde047", glow: 34, swing: 1.4, tempo: 1.3, power: 1.25, icon: "👑", shake: 0, sparkle: true };
+  }
+
   function pipeAim(now) {
     const g = CONFIG.gameplay;
-    const phase = (now / g.pipeSweepMs) * Math.PI * 2;
-    const ang = Math.sin(phase) * (g.pipeMaxAngle * Math.PI / 180);
+    const st = pipeStyle();
+    // ayunan sudut: amplitudo × swing, tempo × tempo (rank tinggi lebih energik)
+    const ang = Math.sin((now / (g.pipeSweepMs / st.tempo)) * Math.PI * 2) * (g.pipeMaxAngle * st.swing * Math.PI / 180);
     const dx = Math.sin(ang), dy = Math.cos(ang);
-    // pivot pipa responsif: di HP (layar sempit) rank lebih atas -> pipa naik biar dekat rank
-    const len = 18, pivotY = (W < 700 ? 92 : 122), speed = g.pipeLaunchSpeed;
-    return { angle: ang, pivotX: W / 2, pivotY, x: W / 2 + dx * len, y: pivotY + dy * len,
-      vx: dx * speed, vy: Math.max(2, dy * speed) };
+    // pivot bergerak horizontal 5%..95% lebar (lambat); ikut tempo rank
+    const t = (Math.sin((now / (g.pipeSweepMs * 3.2 / st.tempo)) * Math.PI * 2) + 1) / 2;
+    const px = W * (0.05 + t * 0.90);
+    const len = 18, pivotY = (W < 700 ? 92 : 122), speed = g.pipeLaunchSpeed * st.power;
+    return { angle: ang, pivotX: px, pivotY, x: px + dx * len, y: pivotY + dy * len,
+      vx: dx * speed, vy: Math.max(2, dy * speed), style: st };
   }
 
   function makeMarble(opts = {}) {
@@ -452,8 +466,8 @@ const Game = (() => {
         quality: { radius: 12, glow: 20, trail: 10 },
       });
     },
-    coverMinus(p = {}) { addCover("minus", p.coins); UI.flashBanner("TUTUP SCORE MINUS", "#4ade80"); AudioFX.whoosh(); },
-    coverPlus(p = {}) { addCover("plus", p.coins); UI.flashBanner("TUTUP SCORE PLUS", "#ef4444"); AudioFX.whoosh(); },
+    coverMinus(p = {}) { addCover("minus", p.coins); coverBanner(); AudioFX.whoosh(); },
+    coverPlus(p = {}) { addCover("plus", p.coins); coverBanner(); AudioFX.whoosh(); },
     blackHole(p = {}) {
       const until = extend(blackHole ? blackHole.until : 0, scaledDur(CONFIG.gameplay.blackHoleDuration, p.coins));
       blackHole = { x: W / 2, y: H * 0.45, until, launched: false };
@@ -468,8 +482,7 @@ const Game = (() => {
       flipUntil = stretch(flipUntil);
       if (wind) wind.until = stretch(wind.until);
       if (blackHole) blackHole.until = stretch(blackHole.until);
-      coverState.minus.until = stretch(coverState.minus.until);
-      coverState.plus.until = stretch(coverState.plus.until);
+      tug *= mul;
       AudioFX.whoosh();
       UI.flashBanner("DURASI x" + mul, "#fde047");
     },
@@ -498,7 +511,7 @@ const Game = (() => {
   };
 
   // buat satu garis penutup (rectangle menerus) dari (x1,y1) ke (x2,y2)
-  function coverLine(kind, x1, y1, x2, y2) {
+  function coverLine(x1, y1, x2, y2) {
     const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
     const len = Math.hypot(x2 - x1, y2 - y1);
     const body = Bodies.rectangle(cx, cy, len, 11, {
@@ -506,36 +519,52 @@ const Game = (() => {
     });
     body.half = len / 2;
     Composite.add(world, body);
-    coverState[kind].bodies.push(body);
+    coverBodies.push(body);
   }
 
-  function addCover(kind, coins) {
-    const cs = coverState[kind];
-    cs.until = extend(cs.until, scaledDur(CONFIG.gameplay.coverDuration, coins)); // STACKING + skala koin
-    if (cs.bodies.length) return; // sudah ada, cukup perpanjang durasi
+  // bentuk body cover sesuai sisi yang menang ("minus" = tenda bantu, "plus" = sabotase)
+  function buildCoverBodies(side) {
     const slots = CONFIG.slots, bins = slots.length, binW = W / bins;
-    const topY = H - 150;            // mulut slot
-    const baseY = topY + 6;          // ujung bawah garis (dekat mulut)
-    const peakY = topY - 26;         // puncak garis (lebih tinggi)
-    const over = binW * 0.3;         // overhang sedikit ke slot tetangga
+    const topY = H - 150, baseY = topY + 6, peakY = topY - 26, over = binW * 0.3;
     const clamp = (x) => Math.max(0, Math.min(W, x));
-
-    if (kind === "minus") {
-      // TENDA SEGITIGA di atas zona minus -> luncurkan ke kiri & kanan (ke plus)
+    if (side === "minus") {
       const idx = slots.map((v, i) => (typeof v === "number" && v < 0) ? i : -1).filter((i) => i >= 0);
       if (!idx.length) return;
       const xL = clamp(Math.min(...idx) * binW - over);
       const xR = clamp((Math.max(...idx) + 1) * binW + over);
       const xC = (xL + xR) / 2;
-      coverLine("minus", xC, peakY, xL, baseY); // sisi kiri (luncur ke kiri)
-      coverLine("minus", xC, peakY, xR, baseY); // sisi kanan (luncur ke kanan)
+      coverLine(xC, peakY, xL, baseY);
+      coverLine(xC, peakY, xR, baseY);
     } else {
-      // 2 GARIS di tepi plus -> luncurkan ke tengah (ke minus)
       let l = 0; while (l < bins && typeof slots[l] === "number" && slots[l] > 0) l++;
       let r = bins - 1; while (r >= 0 && typeof slots[r] === "number" && slots[r] > 0) r--;
-      if (l > 0) coverLine("plus", 0, peakY, clamp(l * binW + over), baseY);              // kiri: tinggi di tepi, turun ke tengah
-      if (r < bins - 1) coverLine("plus", W, peakY, clamp((r + 1) * binW - over), baseY);  // kanan: tinggi di tepi, turun ke tengah
+      if (l > 0) coverLine(0, peakY, clamp(l * binW + over), baseY);
+      if (r < bins - 1) coverLine(W, peakY, clamp((r + 1) * binW - over), baseY);
     }
+  }
+
+  // pasang/lepas body cover supaya cocok dgn sisi yg menang (tug)
+  function updateCover() {
+    const side = tug > 50 ? "minus" : tug < -50 ? "plus" : null;
+    if (side === coverSide) return;
+    coverBodies.forEach((b) => Composite.remove(world, b));
+    coverBodies = [];
+    coverSide = side;
+    if (side) buildCoverBodies(side);
+  }
+
+  // TARIK TAMBANG: tutup minus tarik ke +tug (bantu), tutup plus ke -tug (sabotase). Saling cancel.
+  function addCover(kind, coins) {
+    const d = scaledDur(CONFIG.gameplay.coverDuration, coins);
+    tug += (kind === "minus" ? d : -d);
+    updateCover();
+  }
+  // banner cover: tampilkan sisi yang MENANG + sisa detik (transparan untuk tarik tambang)
+  function coverBanner() {
+    const s = Math.round(Math.abs(tug) / 1000);
+    if (tug > 50) UI.flashBanner("TUTUP SCORE MINUS  " + s + " dtk", "#4ade80");
+    else if (tug < -50) UI.flashBanner("TUTUP SCORE PLUS  " + s + " dtk", "#ef4444");
+    else UI.flashBanner("COVER SERI!", "#e5e7eb");
   }
 
   function trigger(effectName, payload) {
@@ -627,9 +656,10 @@ const Game = (() => {
     if (lowGravityUntil && now > lowGravityUntil) { engine.gravity.y = 1; lowGravityUntil = 0; }
     if (wind && now > wind.until) wind = null;
     if (flipUntil && now > flipUntil) { bars.forEach((b) => Composite.remove(world, b)); bars = []; flipUntil = 0; }
-    for (const kind of ["minus", "plus"]) {
-      const cs = coverState[kind];
-      if (cs.until && now > cs.until) { cs.bodies.forEach((b) => Composite.remove(world, b)); cs.bodies = []; cs.until = 0; }
+    // tarik tambang cover: tug meluruh ke 0 (sisa waktu sisi yg menang)
+    if (tug !== 0) {
+      if (Math.abs(tug) <= dt) tug = 0; else tug -= Math.sign(tug) * dt;
+      updateCover();
     }
 
     processStreams(now);
@@ -726,8 +756,8 @@ const Game = (() => {
     if (flipUntil > now) list.push({ n: "Flip", ms: flipUntil - now, c: "#a78bfa" });
     if (wind && wind.until > now) list.push({ n: "Chaos Wind", ms: wind.until - now, c: "#4ade80" });
     if (blackHole && blackHole.until > now) list.push({ n: "Black Hole", ms: blackHole.until - now, c: "#a78bfa" });
-    if (coverState.minus.until > now) list.push({ n: "Tutup Minus", ms: coverState.minus.until - now, c: "#4ade80" });
-    if (coverState.plus.until > now) list.push({ n: "Tutup Plus", ms: coverState.plus.until - now, c: "#ef4444" });
+    if (tug > 50) list.push({ n: "Tutup Score Minus", ms: tug, c: "#4ade80" });
+    else if (tug < -50) list.push({ n: "Tutup Score Plus", ms: -tug, c: "#ef4444" });
     // durasi stream gift (berapa lama tembakan bola gifter berlangsung)
     for (const s of streams) list.push({ n: "🌊 " + s.owner, ms: s.ballsLeft * s.interval, c: s.color });
     return list;
@@ -749,19 +779,29 @@ const Game = (() => {
 
   function drawPipe() {
     const a = pipeAim(performance.now());
+    const st = a.style, sh = st.shake || 0;
+    const jx = sh ? (Math.random() * 2 - 1) * sh : 0; // gemetar saat melarat
+    const jy = sh ? (Math.random() * 2 - 1) * sh : 0;
+    const px = a.pivotX + jx, py = a.pivotY + jy, mx = a.x + jx, my = a.y + jy;
     ctx.save();
-    ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 13; ctx.lineCap = "round";
-    ctx.shadowBlur = 16; ctx.shadowColor = "#22d3ee";
-    ctx.beginPath(); ctx.moveTo(a.pivotX, a.pivotY); ctx.lineTo(a.x, a.y); ctx.stroke();
-    ctx.fillStyle = "#0ea5e9"; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.arc(a.pivotX, a.pivotY, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = st.color; ctx.lineWidth = 13; ctx.lineCap = "round";
+    ctx.shadowBlur = st.glow; ctx.shadowColor = st.color;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(mx, my); ctx.stroke();
+    ctx.fillStyle = st.color; ctx.shadowBlur = Math.min(st.glow, 12);
+    ctx.beginPath(); ctx.arc(px, py, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    if (st.sparkle && Math.random() < 0.5) spawnSparkle(px, py, st.color, 1); // kilau rank tinggi
+    ctx.save(); // ikon karakter rank di pangkal pipa
+    ctx.font = "16px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(st.icon, px, py);
     ctx.restore();
   }
 
   function drawCovers() {
-    const all = coverState.minus.bodies.map((b) => ["minus", b]).concat(coverState.plus.bodies.map((b) => ["plus", b]));
-    for (const [kind, b] of all) {
-      const a = b.angle, col = kind === "minus" ? "#4ade80" : "#ef4444";
+    if (!coverSide) return;
+    const col = coverSide === "minus" ? "#4ade80" : "#ef4444";
+    for (const b of coverBodies) {
+      const a = b.angle;
       ctx.save();
       ctx.strokeStyle = col; ctx.lineWidth = 7; ctx.lineCap = "round";
       ctx.shadowBlur = 16; ctx.shadowColor = col;

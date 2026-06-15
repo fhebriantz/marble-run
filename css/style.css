@@ -44,7 +44,8 @@ html, body {
 
 #banner {
   position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%) scale(0.6);
-  font-size: clamp(32px, 6vw, 80px); font-weight: 900; letter-spacing: 3px;
+  font-size: clamp(30px, 5.5vw, 64px); font-weight: 900; letter-spacing: 2px;
+  width: 90%; text-align: center; line-height: 1.05;
   opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
 }
 #banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
