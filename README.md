@@ -153,6 +153,24 @@ Relay mengirim JSON; game memetakannya ke efek lewat `mapping`:
 > import di `server/relay.js` bila perlu. Kamu juga bisa pakai sumber event lain
 > (mis. Tikfinity / cloud) selama mengirim format JSON di atas ke `ws://localhost:8080`.
 
+### 🪟 Alternatif Windows: pakai Tikfinity (tanpa relay Node)
+
+[Tikfinity](https://tikfinity.zerody.one/) (app Windows) sudah punya **WebSocket server lokal** sendiri, jadi **tidak perlu menjalankan `relay.js`**. Bridge game ini **otomatis mengenali format Tikfinity** — nama gifter (`nickname`) langsung **nempel ke marble & leaderboard**.
+
+1. Buka **Tikfinity Desktop** → login → masukkan username & **Connect** ke live kamu.
+2. Aktifkan WebSocket server: menu **Settings → "WebSocket / API"** (biasanya nyala default di port **21213**).
+3. Di `js/config.js`, arahkan ke Tikfinity:
+   ```js
+   tiktok: {
+     enabled: true,
+     websocketUrl: "ws://localhost:21213/",
+   }
+   ```
+   > Karena pakai Tikfinity, **jangan** jalankan `run.bat` (itu untuk relay Node). Cukup buka game lewat server statis: `python -m http.server 5500` lalu buka `http://localhost:5500`.
+4. Reload game. Saat ada gift, nama si pemberi muncul di **Feed Aktivitas**, dapat **warna unik**, **bola bernama**, dan masuk **leaderboard**.
+
+> **Pemetaan nama gift:** Tikfinity mengirim `giftName` apa adanya dari TikTok (mis. `"Rose"`, `"Galaxy"`, `"TikTok Universe"`). Pastikan nama di `mapping.giftsByName` (`js/config.js`) **sama persis** dengan nama gift TikTok agar efek pas. Kalau nama tak dikenal, game otomatis jatuh ke `giftTiers` berdasarkan jumlah koin (`diamondCount`).
+
 ### Host di cloud (opsional, untuk HP-only)
 Relay bisa dijalankan di free tier (Railway/Render/Fly) lalu set `websocketUrl` ke URL `wss://...` publiknya.
 
