@@ -142,7 +142,7 @@ const CONFIG = {
   //  Default mati; run.sh / run.bat otomatis menyalakannya saat live.
   // ---------------------------------------------------------------
   tiktok: {
-    enabled: false,
-    websocketUrl: "ws://localhost:8080", // relay TikTok-Live-Connector / cloud
+    enabled: true,
+    websocketUrl: "ws://localhost:21213/", // relay TikTok-Live-Connector / cloud
   },
 };
