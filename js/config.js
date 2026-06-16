@@ -54,7 +54,7 @@ const CONFIG = {
 
     // (3) EVENT ENGAGEMENT GRATIS (tanpa donasi) -> TIDAK masuk leaderboard,
     //     hanya muncul di feed AKTIVITAS lalu hilang.
-    like:   { every: 5, effect: "shoot" },     // tap-tap -> bola PUTIH keluar
+    like:   { every: 1, effect: "shoot" },     // tap-tap -> bola PUTIH keluar (1 tap = 1 shoot)
     follow: "marbleRain",                       // follow -> HUJAN bola
     share:  "blackHole",                        // share -> BLACK HOLE
   },
