@@ -1,0 +1,6 @@
+# relay & node deps tidak perlu di-deploy ke web (statis saja)
+server/
+node_modules/
+*.log
+run.sh
+run.bat
