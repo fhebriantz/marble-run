@@ -158,7 +158,8 @@ Relay mengirim JSON; game memetakannya ke efek lewat `mapping`:
 [Tikfinity](https://tikfinity.zerody.one/) (app Windows) sudah punya **WebSocket server lokal** sendiri, jadi **tidak perlu menjalankan `relay.js`**. Bridge game ini **otomatis mengenali format Tikfinity** — nama gifter (`nickname`) langsung **nempel ke marble & leaderboard**.
 
 1. Buka **Tikfinity Desktop** → login → masukkan username & **Connect** ke live kamu.
-2. Aktifkan WebSocket server: menu **Settings → "WebSocket / API"** (biasanya nyala default di port **21213**).
+2. Gunakan **WebSocket Server bawaan** Tikfinity di port **21213** (endpoint developer *"TikTok LIVE API"*). Ini **jalan otomatis** selama Tikfinity Desktop kebuka & nyambung — biasanya tak perlu di-setting.
+   > ⚠️ **JANGAN** pakai panel **"Streamer.bot connection"** (address/port/endpoint). Itu fitur lain (Tikfinity *mengirim* event ke app Streamer.bot) dan **bukan** yang dibutuhkan game ini.
 3. Di `js/config.js`, arahkan ke Tikfinity:
    ```js
    tiktok: {
