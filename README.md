@@ -112,6 +112,13 @@ Semua angka utama bisa diutak-atik di `js/config.js`:
 
 Game menerima event TikTok lewat **WebSocket** dari sebuah "relay" (pembaca event live). Disediakan relay gratis pakai **TikTok-Live-Connector** (Node.js) — **tanpa API key**, native Linux.
 
+### ⚡ Cara CEPAT (skrip otomatis)
+Tinggal jalanin satu skrip — diminta username, lalu otomatis nyalain koneksi + start game + relay:
+```bash
+./run.sh            # Linux / Mac   (Windows: klik run.bat / jalankan run.bat)
+```
+Lalu buka **http://localhost:5500** di browser/OBS. (Butuh Node.js & python3/python.) Detail manual di bawah:
+
 ### 1) Jalankan relay
 ```bash
 cd server

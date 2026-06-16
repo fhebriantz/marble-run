@@ -139,8 +139,7 @@ const CONFIG = {
 
   // ---------------------------------------------------------------
   //  KONEKSI TIKTOK (opsional, untuk live).
-  //  Biarkan enabled:false saat testing manual di laptop/HP.
-  //  Saat siap live, nyalakan dan arahkan ke relay WebSocket-mu.
+  //  Default mati; run.sh / run.bat otomatis menyalakannya saat live.
   // ---------------------------------------------------------------
   tiktok: {
     enabled: false,
