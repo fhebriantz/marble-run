@@ -4,3 +4,4 @@ node_modules/
 *.log
 run.sh
 run.bat
+run-tikfinity.bat
